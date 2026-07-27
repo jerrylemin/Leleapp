@@ -62,7 +62,7 @@ public partial class App : Application
     private static void ShowStartupFailure(string message, Exception exception)
     {
         var logPath = WriteStartupFailure(message, exception);
-        var details = $"{message}\n\n{exception.Message}\n\nStartup log:\n{logPath}";
+        var details = $"{message}\n\n{exception.GetType().FullName}\nHRESULT: 0x{exception.HResult:X8}\n{exception.Message}\n\nStartup log:\n{logPath}";
         MessageBox(IntPtr.Zero, details, "GhostDeck startup error", 0x00000010);
     }
 
@@ -82,11 +82,26 @@ public partial class App : Application
             .AppendLine($"Process architecture: {RuntimeInformation.ProcessArchitecture}")
             .AppendLine($"OS: {RuntimeInformation.OSDescription}")
             .AppendLine($"Framework: {RuntimeInformation.FrameworkDescription}")
-            .AppendLine($"Base directory: {AppContext.BaseDirectory}")
-            .AppendLine(exception?.ToString() ?? "No exception object was supplied.")
-            .ToString();
+            .AppendLine($"Base directory: {AppContext.BaseDirectory}");
 
-        File.AppendAllText(logPath, text, Encoding.UTF8);
+        if (exception is null)
+        {
+            text.AppendLine("No exception object was supplied.");
+        }
+        else
+        {
+            var depth = 0;
+            for (var current = exception; current is not null; current = current.InnerException)
+            {
+                text.AppendLine($"Exception level {depth}: {current.GetType().FullName}");
+                text.AppendLine($"HRESULT: 0x{current.HResult:X8}");
+                text.AppendLine($"Message: {current.Message}");
+                text.AppendLine(current.StackTrace ?? "No stack trace.");
+                depth++;
+            }
+        }
+
+        File.AppendAllText(logPath, text.ToString(), Encoding.UTF8);
         return logPath;
     }
 

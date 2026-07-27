@@ -29,17 +29,26 @@ public sealed partial class MainWindow : Window
         _power = power;
         _network = network;
         _cleaner = cleaner;
-        SystemBackdrop = new MicaBackdrop();
+
+        try
+        {
+            SystemBackdrop = new MicaBackdrop();
+        }
+        catch
+        {
+            // The app remains usable when Mica is unavailable.
+        }
+
         ProcessList.ItemsSource = ProcessRows;
-        Nav.SelectedItem = Nav.MenuItems[0];
+        Nav.SelectedIndex = 0;
         _timer.Tick += (_, _) => RefreshProcesses();
         _timer.Start();
         RefreshProcesses();
     }
 
-    private void Nav_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
+    private void Nav_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        var tag = args.IsSettingsSelected ? "settings" : (args.SelectedItemContainer?.Tag?.ToString() ?? "dashboard");
+        var tag = (Nav.SelectedItem as ListBoxItem)?.Tag?.ToString() ?? "dashboard";
         DashboardPanel.Visibility = tag == "dashboard" ? Visibility.Visible : Visibility.Collapsed;
         ProcessesPanel.Visibility = tag == "processes" ? Visibility.Visible : Visibility.Collapsed;
         PowerPanel.Visibility = tag == "power" ? Visibility.Visible : Visibility.Collapsed;
@@ -48,7 +57,18 @@ public sealed partial class MainWindow : Window
         AudioPanel.Visibility = tag == "audio" ? Visibility.Visible : Visibility.Collapsed;
         HistoryPanel.Visibility = tag == "history" ? Visibility.Visible : Visibility.Collapsed;
         SettingsPanel.Visibility = tag == "settings" ? Visibility.Visible : Visibility.Collapsed;
-        PageTitle.Text = tag switch { "processes" => "Processes", "power" => "Power and Memory", "network" => "Network", "cleaner" => "Cleaner", "audio" => "Audio", "history" => "History", "settings" => "Settings", _ => "Dashboard" };
+        PageTitle.Text = tag switch
+        {
+            "processes" => "Processes",
+            "power" => "Power and Memory",
+            "network" => "Network",
+            "cleaner" => "Cleaner",
+            "audio" => "Audio",
+            "history" => "History",
+            "settings" => "Settings",
+            _ => "Dashboard"
+        };
+
         if (tag == "power") RefreshPower();
         if (tag == "network") RefreshNetwork();
     }
@@ -60,28 +80,50 @@ public sealed partial class MainWindow : Window
         CpuValue.Text = $"{snapshots.Sum(x => x.CpuPercent):0.0}%";
         ProcessCountValue.Text = snapshots.Count.ToString("N0");
         var memory = GetMemory();
-        MemoryValue.Text = memory.Total == 0 ? "N/A" : $"{memory.Used / 1024d / 1024d / 1024d:0.0} / {memory.Total / 1024d / 1024d / 1024d:0.0} GB";
+        MemoryValue.Text = memory.Total == 0
+            ? "N/A"
+            : $"{memory.Used / 1024d / 1024d / 1024d:0.0} / {memory.Total / 1024d / 1024d / 1024d:0.0} GB";
         ApplyProcessFilter();
     }
 
     private void ApplyProcessFilter()
     {
         var query = ProcessSearch?.Text?.Trim() ?? string.Empty;
-        var selectedIds = ProcessList.SelectedItems.Cast<ProcessGroupRow>().Select(x => x.Identity).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var selectedIds = ProcessList.SelectedItems
+            .Cast<ProcessGroupRow>()
+            .Select(x => x.Identity)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         ProcessRows.Clear();
-        foreach (var group in _allGroups.Where(x => query.Length == 0 || x.DisplayName.Contains(query, StringComparison.CurrentCultureIgnoreCase) || x.Identity.Contains(query, StringComparison.OrdinalIgnoreCase)))
+        foreach (var group in _allGroups.Where(x =>
+                     query.Length == 0 ||
+                     x.DisplayName.Contains(query, StringComparison.CurrentCultureIgnoreCase) ||
+                     x.Identity.Contains(query, StringComparison.OrdinalIgnoreCase)))
+        {
             ProcessRows.Add(new ProcessGroupRow(group));
-        foreach (var row in ProcessRows.Where(x => selectedIds.Contains(x.Identity))) ProcessList.SelectedItems.Add(row);
+        }
+
+        foreach (var row in ProcessRows.Where(x => selectedIds.Contains(x.Identity)))
+        {
+            ProcessList.SelectedItems.Add(row);
+        }
     }
 
     private void ProcessSearch_TextChanged(object sender, TextChangedEventArgs e) => ApplyProcessFilter();
+
     private void RefreshProcesses_Click(object sender, RoutedEventArgs e) => RefreshProcesses();
 
     private async void EndSelected_Click(object sender, RoutedEventArgs e)
     {
         var rows = ProcessList.SelectedItems.Cast<ProcessGroupRow>().ToArray();
         if (rows.Length == 0) return;
-        var processes = rows.SelectMany(x => x.Group.Processes).Where(x => !x.IsProtected).Select(x => new EndProcessItem(x.ProcessId, x.StartTimeUtc, true)).ToArray();
+
+        var processes = rows
+            .SelectMany(x => x.Group.Processes)
+            .Where(x => !x.IsProtected)
+            .Select(x => new EndProcessItem(x.ProcessId, x.StartTimeUtc, true))
+            .ToArray();
+
         var dialog = new ContentDialog
         {
             XamlRoot = Content.XamlRoot,
@@ -91,53 +133,91 @@ public sealed partial class MainWindow : Window
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Close
         };
+
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
         var response = await SendAsync(PrivilegedActionType.EndProcesses, new EndProcessesPayload(processes));
-        await new ContentDialog { XamlRoot = Content.XamlRoot, Title = response.Success ? "Completed" : "Failed", Content = response.Message, CloseButtonText = "OK" }.ShowAsync();
+        await new ContentDialog
+        {
+            XamlRoot = Content.XamlRoot,
+            Title = response.Success ? "Completed" : "Failed",
+            Content = response.Message,
+            CloseButtonText = "OK"
+        }.ShowAsync();
+
         RefreshProcesses();
     }
 
     private void RefreshPower_Click(object sender, RoutedEventArgs e) => RefreshPower();
+
     private void RefreshPower() => PowerList.ItemsSource = _power.Import();
 
     private void RefreshNetwork_Click(object sender, RoutedEventArgs e) => RefreshNetwork();
+
     private void RefreshNetwork() => NetworkList.ItemsSource = _network.GetAdapters().Select(x => new NetworkRow(x)).ToArray();
 
     private async void ScanCleaner_Click(object sender, RoutedEventArgs e)
     {
-        CleanerProgress.IsActive = true;
+        CleanerStatus.Text = "Scanning...";
         try
         {
             var rows = new List<CleanerRow>();
-            foreach (var target in _cleaner.GetTargets()) rows.Add(new CleanerRow(await _cleaner.ScanAsync(target, CancellationToken.None)));
+            foreach (var target in _cleaner.GetTargets())
+            {
+                rows.Add(new CleanerRow(await _cleaner.ScanAsync(target, CancellationToken.None)));
+            }
+
             CleanerList.ItemsSource = rows;
+            CleanerStatus.Text = $"Scan completed. {rows.Count} targets checked.";
         }
-        finally { CleanerProgress.IsActive = false; }
+        catch (Exception ex)
+        {
+            CleanerStatus.Text = $"Scan failed: {ex.Message}";
+        }
     }
 
     private static async Task<ServiceResponse> SendAsync<T>(PrivilegedActionType action, T payload)
     {
         try
         {
-            await using var pipe = new NamedPipeClientStream(".", ServiceProtocol.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+            await using var pipe = new NamedPipeClientStream(
+                ".",
+                ServiceProtocol.PipeName,
+                PipeDirection.InOut,
+                PipeOptions.Asynchronous);
             await pipe.ConnectAsync(3000);
+
             using var reader = new StreamReader(pipe, leaveOpen: true);
             await using var writer = new StreamWriter(pipe, leaveOpen: true) { AutoFlush = true };
-            var request = new ServiceRequest(Guid.NewGuid(), ServiceProtocol.Version, action, JsonSerializer.Serialize(payload));
+            var request = new ServiceRequest(
+                Guid.NewGuid(),
+                ServiceProtocol.Version,
+                action,
+                JsonSerializer.Serialize(payload));
+
             await writer.WriteLineAsync(JsonSerializer.Serialize(request));
             var line = await reader.ReadLineAsync();
-            return line is null ? new(request.CorrelationId, false, "Service returned no response") : JsonSerializer.Deserialize<ServiceResponse>(line) ?? new(request.CorrelationId, false, "Invalid service response");
+            return line is null
+                ? new ServiceResponse(request.CorrelationId, false, "Service returned no response")
+                : JsonSerializer.Deserialize<ServiceResponse>(line)
+                  ?? new ServiceResponse(request.CorrelationId, false, "Invalid service response");
         }
-        catch (Exception ex) { return new(Guid.Empty, false, $"GhostDeck Service is unavailable. {ex.Message}"); }
+        catch (Exception ex)
+        {
+            return new ServiceResponse(Guid.Empty, false, $"GhostDeck Service is unavailable. {ex.Message}");
+        }
     }
 
     private static (ulong Used, ulong Total) GetMemory()
     {
         var status = new MemoryStatusEx();
-        return GlobalMemoryStatusEx(status) ? (status.TotalPhys - status.AvailPhys, status.TotalPhys) : (0, 0);
+        return GlobalMemoryStatusEx(status)
+            ? (status.TotalPhys - status.AvailPhys, status.TotalPhys)
+            : (0, 0);
     }
 
-    [DllImport("kernel32.dll", SetLastError = true)] private static extern bool GlobalMemoryStatusEx([In, Out] MemoryStatusEx status);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GlobalMemoryStatusEx([In, Out] MemoryStatusEx status);
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
     private sealed class MemoryStatusEx

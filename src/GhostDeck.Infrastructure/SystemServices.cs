@@ -1,9 +1,10 @@
 using System.Diagnostics;
-using System.Management;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using GhostDeck.Core;
+using ManagementObject = System.Management.ManagementObject;
+using ManagementObjectSearcher = System.Management.ManagementObjectSearcher;
 using Microsoft.Win32;
 
 namespace GhostDeck.Infrastructure;
@@ -157,7 +158,12 @@ public sealed class CleanupService
         long count = 0, bytes = 0;
         try
         {
-            var option = new EnumerationOptions { RecurseSubdirectories = target.Pattern is null, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.ReparsePoint };
+            var option = new System.IO.EnumerationOptions
+            {
+                RecurseSubdirectories = target.Pattern is null,
+                IgnoreInaccessible = true,
+                AttributesToSkip = FileAttributes.ReparsePoint
+            };
             foreach (var file in Directory.EnumerateFiles(target.RootPath, target.Pattern ?? "*", option))
             {
                 token.ThrowIfCancellationRequested();

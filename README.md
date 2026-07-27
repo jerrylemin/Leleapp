@@ -35,7 +35,16 @@ Open PowerShell as Administrator in the repository folder:
 PowerShell -ExecutionPolicy Bypass -File .\scripts\Setup-GhostDeck.ps1
 ```
 
-The script restores packages, builds Release x64, publishes to `dist\GhostDeck`, installs `GhostDeck.Service`, starts the service, and creates a Desktop shortcut.
+The script performs these actions:
+
+- Stops any running GhostDeck app and service before replacing publish files.
+- Restores packages and builds Release x64.
+- Publishes the UI to `dist\GhostDeck\App`.
+- Publishes the service to `dist\GhostDeck\Service`.
+- Installs and starts `GhostDeck.Service`.
+- Creates a Desktop shortcut.
+
+Keeping the UI and service in separate publish folders prevents a running service from locking shared runtime files during an update.
 
 ## Normal launch
 
@@ -46,7 +55,7 @@ PowerShell -ExecutionPolicy Bypass -File .\scripts\Run-GhostDeck.ps1
 Direct executable after setup:
 
 ```text
-.\dist\GhostDeck\GhostDeck.App.exe
+.\dist\GhostDeck\App\GhostDeck.App.exe
 ```
 
 ## Uninstall service and shortcut
@@ -79,7 +88,8 @@ scripts                       setup, launch, uninstall
 
 - User settings: `%LOCALAPPDATA%\GhostDeck`
 - Shared service data and logs: `%PROGRAMDATA%\GhostDeck`
-- Published binaries: `dist\GhostDeck`
+- Published UI: `dist\GhostDeck\App`
+- Published service: `dist\GhostDeck\Service`
 
 ## Build directly
 

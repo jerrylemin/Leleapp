@@ -5,6 +5,8 @@
     <RootNamespace>GhostDeck.App</RootNamespace>
     <UseWinUI>true</UseWinUI>
     <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <WindowsAppSdkUndockedRegFreeWinRTInitialize>true</WindowsAppSdkUndockedRegFreeWinRTInitialize>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <PublishSingleFile>false</PublishSingleFile>
     <SelfContained>true</SelfContained>

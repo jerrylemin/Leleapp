@@ -22,6 +22,13 @@
 - Cleanup source: `resources/prefetch.bat`.
 - Ghost Mode actions are read at runtime from DesktopBackground, Directory Background, and CommandStore Registry paths.
 
+## Publish layout
+
+- UI publish directory: `dist\GhostDeck\App`.
+- Service publish directory: `dist\GhostDeck\Service`.
+- Setup stops the running UI and service before replacing the publish directories.
+- The split layout prevents the service from locking shared self-contained runtime files used by the UI publish.
+
 ## Current state
 
 Implemented:
@@ -35,14 +42,15 @@ Implemented:
 - Cleaner target scanning.
 - Privileged DNS set, reset and flush handlers.
 - Setup, run and uninstall scripts.
+- Self-contained Windows App SDK publish configuration.
+- Startup failure log at `%LOCALAPPDATA%\GhostDeck\Logs\startup.log`.
 
 Pending:
 
-- Compile validation on a Windows machine.
 - Hardware temperature and per-process GPU telemetry.
 - Audio playback endpoint switching.
 - Tray integration.
-- SQLite action-history repository and UI.
+- Persistent action-history repository and UI.
 - Settings persistence.
 - Cleaner deletion execution.
 - UI buttons for applying power and DNS actions.

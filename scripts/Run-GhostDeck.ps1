@@ -4,11 +4,11 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $root = Split-Path -Parent $PSScriptRoot
-$app = Join-Path $root 'dist\GhostDeck\GhostDeck.App.exe'
+$app = Join-Path $root 'dist\GhostDeck\App\GhostDeck.App.exe'
 $workingDirectory = Split-Path $app -Parent
 $startupLog = Join-Path $env:LOCALAPPDATA 'GhostDeck\Logs\startup.log'
 
-if (-not (Test-Path $app)) {
+if (-not (Test-Path -LiteralPath $app -PathType Leaf)) {
     throw 'GhostDeck is not published. Run scripts\Setup-GhostDeck.ps1 first.'
 }
 
@@ -37,12 +37,12 @@ if (-not $process.HasExited) {
 
 Write-Host "GhostDeck exited during startup. Exit code: $($process.ExitCode)" -ForegroundColor Red
 
-if (Test-Path $startupLog) {
+if (Test-Path -LiteralPath $startupLog) {
     Write-Host "`nStartup log: $startupLog" -ForegroundColor Yellow
-    Get-Content $startupLog -Tail 80
+    Get-Content -LiteralPath $startupLog -Tail 80
 }
 else {
-    Write-Host "No managed startup log was created. The failure likely happened before the WinUI application initialized." -ForegroundColor Yellow
+    Write-Host 'No managed startup log was created. The failure likely happened before the WinUI application initialized.' -ForegroundColor Yellow
 }
 
 Write-Host "`nRecent Windows application errors:" -ForegroundColor Yellow

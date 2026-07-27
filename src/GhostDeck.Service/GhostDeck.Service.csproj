@@ -5,6 +5,6 @@
     <ProjectReference Include="..\GhostDeck.Contracts\GhostDeck.Contracts.csproj" />
     <ProjectReference Include="..\GhostDeck.Infrastructure\GhostDeck.Infrastructure.csproj" />
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.0" />
-    <PackageReference Include="System.IO.Pipes.AccessControl" Version="10.0.0" />
+    <PackageReference Include="System.IO.Pipes.AccessControl" Version="5.0.0" />
   </ItemGroup>
 </Project>

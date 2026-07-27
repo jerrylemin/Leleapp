@@ -1,3 +1,5 @@
+using System.Runtime.InteropServices;
+using System.Text;
 using GhostDeck.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
@@ -11,19 +13,83 @@ public partial class App : Application
 
     public App()
     {
-        InitializeComponent();
-        var services = new ServiceCollection();
-        services.AddSingleton<ProcessTelemetryService>();
-        services.AddSingleton<PowerActionImporter>();
-        services.AddSingleton<NetworkInfoService>();
-        services.AddSingleton<CleanupService>();
-        services.AddSingleton<MainWindow>();
-        Services = services.BuildServiceProvider();
+        UnhandledException += OnUnhandledException;
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+            WriteStartupFailure("AppDomain.CurrentDomain.UnhandledException", args.ExceptionObject as Exception);
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            WriteStartupFailure("TaskScheduler.UnobservedTaskException", args.Exception);
+            args.SetObserved();
+        };
+
+        try
+        {
+            InitializeComponent();
+
+            var services = new ServiceCollection();
+            services.AddSingleton<ProcessTelemetryService>();
+            services.AddSingleton<PowerActionImporter>();
+            services.AddSingleton<NetworkInfoService>();
+            services.AddSingleton<CleanupService>();
+            services.AddSingleton<MainWindow>();
+            Services = services.BuildServiceProvider();
+        }
+        catch (Exception ex)
+        {
+            ShowStartupFailure("GhostDeck failed while loading application resources.", ex);
+            throw;
+        }
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        _window = Services.GetRequiredService<MainWindow>();
-        _window.Activate();
+        try
+        {
+            _window = Services.GetRequiredService<MainWindow>();
+            _window.Activate();
+        }
+        catch (Exception ex)
+        {
+            ShowStartupFailure("GhostDeck failed while creating the main window.", ex);
+        }
     }
+
+    private static void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs args)
+    {
+        WriteStartupFailure("Microsoft.UI.Xaml.Application.UnhandledException", args.Exception);
+    }
+
+    private static void ShowStartupFailure(string message, Exception exception)
+    {
+        var logPath = WriteStartupFailure(message, exception);
+        var details = $"{message}\n\n{exception.Message}\n\nStartup log:\n{logPath}";
+        MessageBox(IntPtr.Zero, details, "GhostDeck startup error", 0x00000010);
+    }
+
+    private static string WriteStartupFailure(string source, Exception? exception)
+    {
+        var logDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "GhostDeck",
+            "Logs");
+        Directory.CreateDirectory(logDirectory);
+
+        var logPath = Path.Combine(logDirectory, "startup.log");
+        var text = new StringBuilder()
+            .AppendLine(new string('=', 80))
+            .AppendLine(DateTimeOffset.Now.ToString("O"))
+            .AppendLine(source)
+            .AppendLine($"Process architecture: {RuntimeInformation.ProcessArchitecture}")
+            .AppendLine($"OS: {RuntimeInformation.OSDescription}")
+            .AppendLine($"Framework: {RuntimeInformation.FrameworkDescription}")
+            .AppendLine($"Base directory: {AppContext.BaseDirectory}")
+            .AppendLine(exception?.ToString() ?? "No exception object was supplied.")
+            .ToString();
+
+        File.AppendAllText(logPath, text, Encoding.UTF8);
+        return logPath;
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern int MessageBox(IntPtr hWnd, string text, string caption, uint type);
 }

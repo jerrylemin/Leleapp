@@ -3,5 +3,6 @@
     <ProjectReference Include="..\GhostDeck.Core\GhostDeck.Core.csproj" />
     <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.4" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.0" />
+    <PackageReference Include="System.Management" Version="10.0.0" />
   </ItemGroup>
 </Project>
